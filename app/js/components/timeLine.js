@@ -6,6 +6,9 @@ export default class TimeLine {
 		this.posts = JSON.parse(localStorage.getItem("time-line-list")) || []
 
 		this.callSendEventForForm = this.callSendEventForForm.bind(this)
+
+		this.latitude = "не указано"
+		this.longitude = "не указано"
 	}
 
 	init() {
@@ -41,35 +44,125 @@ export default class TimeLine {
 
 		this.mainForm = this.timeLine.querySelector("#time-line__form")
 		this.sendTextArea = this.mainForm.querySelector("textarea")
+		this.audio = this.mainForm.querySelector(".time-line__audio input")
+		this.video = this.mainForm.querySelector(".time-line__video input")
 
 		this.parrentElement.appendChild(this.timeLine)
-
-		this.coord = "51.50651, 0.235432"
 
 		this.addEvent()
 
 		this.renderPosts("all")
 	}
 
+	getGeolocation() {
+		function resolveGeo(data) {
+			this.latitude = data.coords.latitude
+
+			this.longitude = data.coords.longitude
+		}
+
+		function rejectGeo() {
+			if (this.latitude === "не указано" && this.longitude === "не указано") {
+				this.createErrorPopup()
+			}
+		}
+
+		if (navigator.geolocation) {
+			navigator.geolocation.getCurrentPosition(resolveGeo.bind(this), rejectGeo.bind(this))
+		}
+	}
+
+	createErrorPopup() {
+		this.popup = document.createElement("div")
+		this.popup.classList.add("popup-error")
+
+		this.popup.innerHTML = `
+			<div class="popup-error__content">
+				<h2 class="popup-error__title">Что-то пошло не так</h2>
+				<p class="popup-error__text">К сожалению, нам не удалось определить ваше местоположение, пожалуйста, дайте разрешение на использование геолокации, либо введите кооординаты в ручную.</p>
+				<h3 class="popup-error__subtitle">Широта и долгота через запятую</h3>
+				<input class="popup-error__input" type="text" placeholder="51.50851, −0.12572" />
+				<div class="popup-error__buttons">
+					<button class="popup-error__buttons-close">Отмена</button>
+					<button class="popup-error__buttons-ok">Ok</button>
+				</div>
+			</div>
+		`
+
+		document.querySelector("body").appendChild(this.popup)
+
+		const input = this.popup.querySelector(".popup-error__input")
+
+		input.addEventListener("input", () => {
+			input.style.board = "1px solid #0000000"
+		})
+
+		this.popup.addEventListener("click", e => {
+			if (e.target.closest(".popup-error__buttons-close")) {
+				this.popup.remove()
+				this.popup = null
+			}
+
+			if (e.target.closest(".popup-error__buttons-ok")) {
+				if (this.validateGeolocation(input.value)) {
+					this.popup.remove()
+					this.popup = null
+
+					this.createPost()
+					this.sendTextArea.value = ""
+
+					return
+				}
+
+				input.style.border = "2px solid #ff0000"
+
+				throw new Error("Координаты неверного формата")
+			}
+		})
+	}
+
+	validateGeolocation(text) {
+		let coords = text.replace(/\s/g, "")
+
+		if (/^-?\d{1,3}\.\d+,-?\d{1,3}\.\d+$/.test(coords)) {
+			coords = coords.split(",")
+			this.latitude = +coords[0]
+			this.longitude = +coords[1]
+
+			return true
+		}
+
+		this.latitude = "не указано"
+		this.longitude = "не указано"
+
+		return false
+	}
+
 	createPost(type) {
 		const id = uuid4()
 
-		const item = document.createElement("li")
-		item.classList.add("time-line__item")
-		item.dataset.id = id
+		const wrapper = document.createElement("div")
 
 		const date = this.dateFormat()
+
+		const item = document.createElement("li")
+
+		item.dataset.id = id
 
 		item.innerHTML = `
             <span class="time-line__item-date">${date}</span>
             <p class="time-line__item-text">${this.sendTextArea.value}</p>
-            <span class="time-line__item-coord">${this.coord}</span>
+            <span class="time-line__item-coord">[${this.latitude}, ${this.longitude}]</span>
         `
+
+		item.classList.add("time-line__item")
+
+		wrapper.appendChild(item)
 
 		this.posts.push({
 			id,
 			type,
-			element: item
+			element: wrapper.innerHTML
 		})
 
 		localStorage.setItem("time-line-list", JSON.stringify(this.posts))
@@ -79,12 +172,12 @@ export default class TimeLine {
 
 	renderPosts(all = null) {
 		if (!all) {
-			this.timeLineList.insertAdjacentElement("afterbegin", this.posts[this.posts.length - 1].element)
+			this.timeLineList.insertAdjacentHTML("afterbegin", this.posts[this.posts.length - 1].element)
 			return
 		}
 
 		if (this.posts.length !== 0) {
-			this.posts.forEach(post => this.timeLineList.insertAdjacentElement("afterbegin", post.element))
+			this.posts.forEach(post => this.timeLineList.insertAdjacentHTML("afterbegin", post.element))
 		}
 	}
 
@@ -92,7 +185,12 @@ export default class TimeLine {
 		this.mainForm.addEventListener("submit", e => {
 			e.preventDefault()
 
-			this.createPost()
+			if (this.latitude === "не указано" && this.longitude === "не указано") {
+				this.getGeolocation()
+			} else {
+				this.createPost()
+				this.sendTextArea.value = ""
+			}
 		})
 
 		this.sendTextArea.addEventListener("keydown", this.callSendEventForForm)
@@ -100,6 +198,18 @@ export default class TimeLine {
 		this.sendTextArea.addEventListener("keyup", e => {
 			if (e.key === "Shift") {
 				this.sendTextArea.addEventListener("keydown", this.callSendEventForForm)
+			}
+		})
+
+		document.querySelector(".time-line__audio").addEventListener("click", () => {
+			if (!this.popup) {
+				this.audio.click()
+			}
+		})
+
+		document.querySelector(".time-line__video").addEventListener("click", () => {
+			if (!this.popup) {
+				this.video.click()
 			}
 		})
 	}
