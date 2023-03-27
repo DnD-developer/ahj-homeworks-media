@@ -1,4 +1,5 @@
 import uuid4 from "uuid4"
+import validateGeolocation from "../services/service"
 
 export default class TimeLine {
 	constructor(parrentElement) {
@@ -26,16 +27,18 @@ export default class TimeLine {
                 <form class="time-line__form" name="time-line__form" id="time-line__form">
                     <textarea class="time-line__textarea" name="time-line__textarea"></textarea>
                     <div class="time-line__audio">
-                        <input name="time-line__audio" type="file" />
+                        <input name="time-line__audio" type="file" accept=".mp3, .mpa " />
                         <span>
                             <i class="fa-solid fa-volume-low"></i>
+							<i class="fa-regular fa-file-audio hide"></i>
                         </span>
                     </div>
 
                     <div class="time-line__video">
-                        <input name="time-line__video" type="file" />
+                        <input name="time-line__video" type="file" accept=".mp4, .3gp, .mov" />
                         <span>
                             <i class="fa-solid fa-video"></i>
+							<i class="fa-regular fa-file-video hide"></i>
                         </span>
                     </div>
                 </form>
@@ -44,8 +47,6 @@ export default class TimeLine {
 
 		this.mainForm = this.timeLine.querySelector("#time-line__form")
 		this.sendTextArea = this.mainForm.querySelector("textarea")
-		this.audio = this.mainForm.querySelector(".time-line__audio input")
-		this.video = this.mainForm.querySelector(".time-line__video input")
 
 		this.parrentElement.appendChild(this.timeLine)
 
@@ -59,12 +60,13 @@ export default class TimeLine {
 			this.latitude = data.coords.latitude
 
 			this.longitude = data.coords.longitude
+
+			this.createPost()
+			this.sendTextArea.value = ""
 		}
 
 		function rejectGeo() {
-			if (this.latitude === "не указано" && this.longitude === "не указано") {
-				this.createErrorPopup()
-			}
+			this.createErrorPopup()
 		}
 
 		if (navigator.geolocation) {
@@ -104,7 +106,12 @@ export default class TimeLine {
 			}
 
 			if (e.target.closest(".popup-error__buttons-ok")) {
-				if (this.validateGeolocation(input.value)) {
+				const [latitude, longitude] = validateGeolocation(input.value)
+
+				if (latitude && longitude) {
+					this.latitude = latitude
+					this.longitude = longitude
+
 					this.popup.remove()
 					this.popup = null
 
@@ -121,24 +128,7 @@ export default class TimeLine {
 		})
 	}
 
-	validateGeolocation(text) {
-		let coords = text.replace(/\s/g, "")
-
-		if (/^-?\d{1,3}\.\d+,-?\d{1,3}\.\d+$/.test(coords)) {
-			coords = coords.split(",")
-			this.latitude = +coords[0]
-			this.longitude = +coords[1]
-
-			return true
-		}
-
-		this.latitude = "не указано"
-		this.longitude = "не указано"
-
-		return false
-	}
-
-	createPost(type) {
+	createPost() {
 		const id = uuid4()
 
 		const wrapper = document.createElement("div")
@@ -151,7 +141,7 @@ export default class TimeLine {
 
 		item.innerHTML = `
             <span class="time-line__item-date">${date}</span>
-            <p class="time-line__item-text">${this.sendTextArea.value}</p>
+            <p class="time-line__item-text">${this.sendTextArea.value ? this.sendTextArea.value : "Нет описания"}</p>
             <span class="time-line__item-coord">[${this.latitude}, ${this.longitude}]</span>
         `
 
@@ -161,7 +151,6 @@ export default class TimeLine {
 
 		this.posts.push({
 			id,
-			type,
 			element: wrapper.innerHTML
 		})
 
@@ -185,12 +174,7 @@ export default class TimeLine {
 		this.mainForm.addEventListener("submit", e => {
 			e.preventDefault()
 
-			if (this.latitude === "не указано" && this.longitude === "не указано") {
-				this.getGeolocation()
-			} else {
-				this.createPost()
-				this.sendTextArea.value = ""
-			}
+			this.getGeolocation()
 		})
 
 		this.sendTextArea.addEventListener("keydown", this.callSendEventForForm)
@@ -203,13 +187,13 @@ export default class TimeLine {
 
 		document.querySelector(".time-line__audio").addEventListener("click", () => {
 			if (!this.popup) {
-				this.audio.click()
+				this.audioInputDomEl.click()
 			}
 		})
 
 		document.querySelector(".time-line__video").addEventListener("click", () => {
 			if (!this.popup) {
-				this.video.click()
+				this.videoInputDomEl.click()
 			}
 		})
 	}
